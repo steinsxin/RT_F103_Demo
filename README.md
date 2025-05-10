@@ -10,7 +10,7 @@ RT-Thread 示例工程，适用于 **STM32F103C8T6**开发板
 ## 🛠️ 开发环境要求
 
 - 开发板：STM32F103C8T6
-- 开发环境：Clion / STM32CubeIDE / GCC 工具链
+- 开发环境：Clion / STM32CubeMX / OpenOCD / GCC 工具链
 - 操作系统：RT-Thread Nano 版本
 
 
