@@ -59,6 +59,7 @@ include_directories(
         Middlewares/ST/STM32_USB_Device_Library/Core/Inc
         rt-thread/bsp
         rt-thread/include
+        rt-thread/components/finsh
         USB_DEVICE/App
         USB_DEVICE/Target
         application
@@ -66,7 +67,7 @@ include_directories(
 
 add_definitions(-DDEBUG -DUSE_HAL_DRIVER -DSTM32F103xB)
 
-file(GLOB_RECURSE SOURCES "Core/*.*" "Drivers/*.*" "Middlewares/*.*" "rt-thread/*.*" "USB_DEVICE/*.*")
+file(GLOB_RECURSE SOURCES "application/*.*" "Core/*.*" "Drivers/*.*" "Middlewares/*.*" "rt-thread/*.*" "USB_DEVICE/*.*")
 
 set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F103C8TX_FLASH.ld)
 

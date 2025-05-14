@@ -3,15 +3,17 @@ RT-Thread 示例工程，适用于 **STM32F103C8T6**开发板
 
 ## 📁 项目结构说明
 
-此工程基于 **RT-Thread** 嵌入式实时操作系统，演示了基本的线程创建与 LED 控制。适合用于初学者入门 RT-Thread 和 STM32。
+此工程基于 **RT-Thread Nano** 嵌入式实时操作系统，演示了基本线程创建、LED 控制及 FinSH 命令行交互功能。适合初学者入门 RT-Thread 和 STM32 开发
 
 
 
 ## 🛠️ 开发环境要求
 
-- 开发板：STM32F103C8T6
-- 开发环境：Clion / STM32CubeMX / OpenOCD / GCC 工具链
-- 操作系统：RT-Thread Nano 版本
+- **开发板**：STM32F103C8T6
+- **开发环境**：
+  - CLion / STM32CubeMX
+  - OpenOCD / GCC 工具链
+- **操作系统**：RT-Thread Nano 版本
 
 
 
@@ -19,97 +21,174 @@ RT-Thread 示例工程，适用于 **STM32F103C8T6**开发板
 
 ### 1.设置程序入口（startup 文件）
 
-在 `Core/Startup/startup_stm32f103c8tx.s` 中，确认以 `entry` 作为应用程序入口：
+在 `Core/Startup/startup_stm32f103c8tx.s` 中确认入口为 `entry`：
 
 ```
-/* Call static constructors */
-    bl __libc_init_array
-/* Call the application's entry point. */
-    bl entry
-    bx lr
-.size Reset_Handler, .-Reset_Handler
+bl __libc_init_array  
+bl entry  /* 应用程序入口 */  
+bx lr  
 ```
 
-### 2.启用堆实现（内存分配方式）
+#### **动态内存分配（必选）**
 
-请在 `rtconfig.h` 中配置 一种堆管理方式，必须启用，否则**动态内存分配将失败！
+在 `rtconfig.h` 中选择一种堆管理方式：
 
-#### ✅ 推荐配置（一般用途）
+- ✅ 推荐：通用内存管理  ：
 
-```
-#define RT_USING_MEMHEAP_AS_HEAP
-```
+  ```
+  #define RT_USING_MEMHEAP_AS_HEAP  
+  ```
 
-- 使用 `rt_memheap_init()` 初始化。
-- 稳定可靠，适用于大多数动态内存管理场景。
+- 🧩 轻量级：小内存设备：
 
-#### 🧩 轻量级堆（内存较紧张场景）
+  ```
+  #define RT_USING_SMALL_MEM_AS_HEAP  
+  ```
 
-```
-#define RT_USING_SMALL_MEM_AS_HEAP
-```
+- 🧱 高级：Slab 分配器（固定块） 
 
-- 使用 `rt_smem_init()`。
-- 占用资源少，但功能相对有限。
+  ```
+  #define RT_USING_SLAB_AS_HEAP  
+  ```
 
-#### 🧱 Slab 分配器（固定块大小，较少使用）
+### 2. FinSH 命令行组件集成
 
-```
-#define RT_USING_SLAB_AS_HEAP
-```
+#### **启用 FinSH**
 
-- 使用 `rt_slab_init()`。
-- 适用于特定用途，不推荐初学者使用。
-
-
-
-## 💡 示例：创建一个 LED 闪烁线程
+在 `rtconfig.h` 中配置：
 
 ```
-/* 定义线程控制块 */
-static struct rt_thread led_thread;
-
-/* 定义线程栈（对齐） */
-ALIGN(RT_ALIGN_SIZE)
-static rt_uint8_t rt_led_thread_stack[1024];
-
-/* 线程入口函数 */
-static void led_thread_entry(void* parameter)
-{
-    while (1)
-    {
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
-        rt_thread_delay(1000);   // 延时 1000 tick
-
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-        rt_thread_delay(1000);   // 延时 1000 tick
-    }
-}
-
-/* main 函数中初始化并启动线程 */
-int main(void)
-{
-    rt_thread_init(&led_thread,                 // 线程控制块
-                   "led1",                      // 线程名称
-                   led_thread_entry,            // 线程入口函数
-                   RT_NULL,                     // 参数
-                   rt_led_thread_stack,         // 栈起始地址
-                   sizeof(rt_led_thread_stack), // 栈大小
-                   3,                           // 优先级
-                   20);                         // 时间片
-    rt_thread_startup(&led_thread);             // 启动线程
-}
+#define RT_USING_CONSOLE  
+#define RT_USING_FINSH  
+#define FINSH_USING_SYMTAB        /* 支持 Tab 补全 */  
+#define FINSH_USING_DESCRIPTION   /* 命令描述功能 */  
 ```
+
+在 `shell.h` 中配置：
+
+```
+#ifndef FINSH_THREAD_PRIORITY
+    #define FINSH_THREAD_PRIORITY 7
+#endif
+```
+
+#### **串口输出/输入实现**
+
+在 `board.c` 中实现以下函数：
+
+- **控制台输出**（需适配硬件）：
+
+  ```
+  void rt_hw_console_output(const char *str)
+  {
+      uint8_t ch[1];
+      rt_enter_critical(); // 进入临界区，避免中断打断输出
+  
+      while (*str)
+      {
+          if (*str == '\n')
+          {
+              ch[0] = '\r';
+              if (USB_SendData(ch, 1) < 0)    break;
+          }
+  
+          ch[0] = *str++;
+          if (USB_SendData(ch, 1) < 0)    break;
+      }
+  
+      rt_exit_critical(); // 退出临界区
+  }
+  ```
+
+- **FinSH 输入**（需适配串口接收缓冲区）：
+
+  ```
+  char rt_hw_console_getchar(void)
+  {
+      if (rx_read_index != rx_write_index)
+      {
+          char ch = rx_buffer[rx_read_index++];
+          if (rx_read_index >= RX_BUFFER_SIZE)
+              rx_read_index = 0;
+          return ch;
+      }
+      else
+      {
+          return -1; // 无数据
+      }
+  }
+  ```
+
+#### 链接脚本关键配置
+
+在 `.ld` 文件中保留 RT-Thread 自动初始化段（rodata字段后）：
+
+代码编译过程的最后一步链接，链接器会将我们未使用到的函数优化，不加入到最终的可执行文件中。
+
+这里就要用的 ld 文件中的关键字 `KEEP`：
+
+```
+/* === RT-Thread auto-sections start === */
+  .rtt_sections :
+  {
+    . = ALIGN(8);
+    __fsymtab_start = .;
+    KEEP(*(FSymTab))
+    __fsymtab_end = .;
+
+    . = ALIGN(8);
+    __vsymtab_start = .;
+    KEEP(*(VSymTab))
+    __vsymtab_end = .;
+
+    . = ALIGN(8);
+    __rt_init_start = .;
+    KEEP(*(SORT(.rti_fn*)))
+    __rt_init_end = .;
+
+    . = ALIGN(8);
+    __rt_utest_tc_tab_start = .;
+    KEEP(*(UtestTcTab))
+    __rt_utest_tc_tab_end = .;
+
+    . = ALIGN(8);
+  } >FLASH
+```
+
+
+
+## 💡 示例代码
+
+### LED 闪烁线程
+
+```
+static void led_thread_entry(void* parameter) {  
+    while (1) {  
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);  
+        rt_thread_delay(500);  // 500ms 延时  
+    }  
+}  
+
+int main(void) {  
+    rt_thread_init(&led_thread, "led", led_thread_entry, RT_NULL,  
+                   rt_led_thread_stack, sizeof(rt_led_thread_stack), 3, 20);  
+    rt_thread_startup(&led_thread);  
+}  
+```
+
+### FinSH 自定义命令
+
+```
+void led_toggle(int argc, char** argv) {  
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);  
+}  
+MSH_CMD_EXPORT(led_toggle, "Toggle LED on PC13")
+```
+
+
 
 ## 🧪 注意事项
 
-- 请确认系统堆初始化已完成，调用如下函数，并传入正确的堆区地址和大小：
-
-```
-rt_system_heap_init(rt_heap_begin_get(), rt_heap_end_get());
-```
-
-- 如果你使用 `rt_thread_create()` 并返回 `NULL`，通常是因为：
-  - 堆未启用或未初始化；
-  - 堆空间不足；
-  - 堆类型与初始化函数不匹配；
+1. **堆初始化**：确保 `rt_system_heap_init()` 在 `main()` 中调用，否则动态创建线程会失败。
+2. **优先级冲突**：FinSH 线程优先级（默认 20）必须 ≤ `RT_THREAD_PRIORITY_MAX`（如设为 8 则需调整 FinSH 优先级至 7）。
+3. **符号表优化**：链接脚本必须用 `KEEP` 保留 RT-Thread 的自动初始化段，否则 FinSH 命令无法注册。

@@ -12,14 +12,23 @@
 #include <rtthread.h>
 
 #include "main.h"
+#include "usb_device.h"
+#include "usbd_cdc_if.h"
 #include "gpio.h"
+
+// USB接收队列
+extern uint8_t rx_buffer[RX_BUFFER_SIZE];
+extern volatile uint16_t rx_write_index;
+extern volatile uint16_t rx_read_index;
+
+extern int USB_SendData(uint8_t* data, uint16_t len);
 
 #if defined(RT_USING_USER_MAIN) && defined(RT_USING_HEAP)
 /*
  * Please modify RT_HEAP_SIZE if you enable RT_USING_HEAP
  * the RT_HEAP_SIZE max value = (sram size - ZI size), 1024 means 1024 bytes
  */
-#define RT_HEAP_SIZE (15*1024)
+#define RT_HEAP_SIZE (10*1024)
 static rt_uint8_t rt_heap[RT_HEAP_SIZE];
 
 RT_WEAK void *rt_heap_begin_get(void)
@@ -61,6 +70,7 @@ void rt_hw_board_init(void)
 
     /* Initialize all configured peripherals */
     MX_GPIO_Init();
+    MX_USB_DEVICE_Init();
 
     /* Call components board initial (use INIT_BOARD_EXPORT()) */
 #ifdef RT_USING_COMPONENTS_INIT
@@ -73,62 +83,46 @@ void rt_hw_board_init(void)
 }
 
 #ifdef RT_USING_CONSOLE
-
-static UART_HandleTypeDef UartHandle;
-static int uart_init(void)
-{
-    /* TODO: Please modify the UART port number according to your needs */
-    UartHandle.Instance = USART2;
-    UartHandle.Init.BaudRate = 115200;
-    UartHandle.Init.WordLength = UART_WORDLENGTH_8B;
-    UartHandle.Init.StopBits = UART_STOPBITS_1;
-    UartHandle.Init.Parity = UART_PARITY_NONE;
-    UartHandle.Init.Mode = UART_MODE_TX_RX;
-    UartHandle.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-    UartHandle.Init.OverSampling = UART_OVERSAMPLING_16;
-
-    if (HAL_UART_Init(&UartHandle) != HAL_OK)
-    {
-        while (1);
-    }
-    return 0;
-}
-INIT_BOARD_EXPORT(uart_init);
-
 void rt_hw_console_output(const char *str)
 {
-    rt_size_t i = 0, size = 0;
-    char a = '\r';
+    uint8_t ch[1];
+    rt_enter_critical(); // 进入临界区，避免中断打断输出
 
-    __HAL_UNLOCK(&UartHandle);
-
-    size = rt_strlen(str);
-
-    for (i = 0; i < size; i++)
+    while (*str)
     {
-        if (*(str + i) == '\n')
+        if (*str == '\n')
         {
-            HAL_UART_Transmit(&UartHandle, (uint8_t *)&a, 1, 1);
+            ch[0] = '\r';
+            if (USB_SendData(ch, 1) < 0)    break;
         }
-        HAL_UART_Transmit(&UartHandle, (uint8_t *)(str + i), 1, 1);
+
+        ch[0] = *str++;
+        if (USB_SendData(ch, 1) < 0)    break;
     }
+
+    rt_exit_critical(); // 退出临界区
 }
 #endif
 
 #ifdef RT_USING_FINSH
 char rt_hw_console_getchar(void)
 {
-    /* Note: the initial value of ch must < 0 */
-    int ch = -1;
-
-    if (__HAL_UART_GET_FLAG(&UartHandle, UART_FLAG_RXNE) != RESET)
+    if (rx_read_index != rx_write_index)
     {
-        ch = UartHandle.Instance->DR & 0xff;
+        char ch = rx_buffer[rx_read_index++];
+        if (rx_read_index >= RX_BUFFER_SIZE)
+            rx_read_index = 0;
+        return ch;
     }
     else
     {
-        rt_thread_mdelay(10);
+        return -1; // 无数据
     }
-    return ch;
 }
 #endif
+
+// CMD Test
+void led_toggle(int argc, char** argv) {
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+}
+MSH_CMD_EXPORT(led_toggle, "Toggle LED on PC13")

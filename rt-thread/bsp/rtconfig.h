@@ -117,7 +117,7 @@
 // <h>Console Configuration
 // <c1>Using console
 //  <i>Using console
-//#define RT_USING_CONSOLE
+#define RT_USING_CONSOLE
 // </c>
 // <o>the buffer size of console <1-1024>
 //  <i>the buffer size of console
@@ -129,6 +129,9 @@
 // <c1>include finsh config
 //  <i>Select this choice if you using FinSH 
 //#include "finsh_config.h"
+#define RT_USING_FINSH
+#define FINSH_USING_SYMTAB      /* 开启系统 FinSH 时：定义该宏开启使用 Tab 键，未定义则关闭 */
+#define FINSH_USING_DESCRIPTION /* 开启描述功能 */
 // </c>
 // </h>
 

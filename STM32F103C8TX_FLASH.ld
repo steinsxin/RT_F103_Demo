@@ -85,6 +85,32 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH
 
+  /* === RT-Thread auto-sections start === */
+  .rtt_sections :
+  {
+    . = ALIGN(8);
+    __fsymtab_start = .;
+    KEEP(*(FSymTab))
+    __fsymtab_end = .;
+
+    . = ALIGN(8);
+    __vsymtab_start = .;
+    KEEP(*(VSymTab))
+    __vsymtab_end = .;
+
+    . = ALIGN(8);
+    __rt_init_start = .;
+    KEEP(*(SORT(.rti_fn*)))
+    __rt_init_end = .;
+
+    . = ALIGN(8);
+    __rt_utest_tc_tab_start = .;
+    KEEP(*(UtestTcTab))
+    __rt_utest_tc_tab_end = .;
+
+    . = ALIGN(8);
+  } >FLASH
+
   .ARM.extab (READONLY) : /* The "READONLY" keyword is only supported in GCC11 and later, remove it if using GCC10 or earlier. */
   {
     . = ALIGN(4);

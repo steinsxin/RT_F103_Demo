@@ -24,6 +24,7 @@ int USB_SendData(uint8_t* data, uint16_t len) {
     return (CDC_Transmit_FS(data, len) == USBD_OK) ? 0 : -2;
 }
 
+
 /**
  * printf 重定向
  * @param format
@@ -41,3 +42,5 @@ PUTCHAR_PROTOTYPE
     USB_SendData((uint8_t*)&ch, 1);
     return ch;
 }
+
+

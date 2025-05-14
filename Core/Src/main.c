@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "usb_device.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -61,7 +62,7 @@ static struct rt_thread led_thread;
 /* 定义线程控栈时要求RT_ALIGN_SIZE个字节对齐 */
 ALIGN(RT_ALIGN_SIZE)
 /* 定义线程栈 */
-static rt_uint8_t rt_led_thread_stack[1024];
+static rt_uint8_t rt_led_thread_stack[256];
 
 static void led_thread_entry(void* parameter)
 {
@@ -72,7 +73,6 @@ static void led_thread_entry(void* parameter)
 
         HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
         rt_thread_delay(1000);   /* 延时1000个tick */
-
     }
 }
 /* USER CODE END 0 */
@@ -83,16 +83,17 @@ static void led_thread_entry(void* parameter)
   */
 int main(void)
 {
-
-    rt_thread_init(&led_thread,                    /* 线程控制块 */
-                   "led1",                              /* 线程名字 */
-                   led_thread_entry,                    /* 线程入口函数 */
-                   RT_NULL,                      /* 线程入口函数参数 */
-                   &rt_led_thread_stack[0],     /* 线程栈起始地址 */
-                   sizeof(rt_led_thread_stack), /* 线程栈大小 */
-                   3,                            /* 线程的优先级 */
-                   20);                          /* 线程时间片 */
-    rt_thread_startup(&led_thread);             /* 启动线程，开启调度 */
+  /* USER CODE BEGIN 2 */
+    rt_thread_init(&led_thread,                 // 线程控制块
+                   "led1",                      // 线程名称
+                   led_thread_entry,            // 线程入口函数
+                   RT_NULL,                     // 参数
+                   rt_led_thread_stack,         // 栈起始地址
+                   sizeof(rt_led_thread_stack), // 栈大小
+                   3,                           // 优先级
+                   20);                         // 时间片
+    rt_thread_startup(&led_thread);             // 启动线程
+  /* USER CODE END 2 */
 }
 
 /**
@@ -103,6 +104,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -129,6 +131,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
+  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
   }
